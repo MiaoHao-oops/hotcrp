@@ -1,5 +1,22 @@
 <?php
 class SimulationExtension {
+    static function login(Contact $user, Qrequest $qreq) {
+        // Only registered by the loopback-only simulation configuration.
+        if (!$user->has_account_here()) {
+            $local = $user->conf->user_by_email($_SERVER["REMOTE_USER"] ?? "");
+            if (!$local) {
+                throw new RuntimeException("Local simulation account is missing");
+            }
+            $info = LoginHelper::login_complete(LoginHelper::check_external_login($local), $qreq);
+            if (!($info["ok"] ?? false)) {
+                throw new RuntimeException("Local account is disabled");
+            }
+            $qreq->redirect($info["redirect"]);
+        } else if ($qreq->page() === "signin") {
+            $qreq->redirect_hoturl("index");
+        }
+    }
+
     static function banner(Contact $user, Qrequest $qreq) {
         $id = defined('SIM_CONF_ID') ? SIM_CONF_ID : getenv('SIM_CONF_ID');
         $url = '/?conference=' . rawurlencode($id);

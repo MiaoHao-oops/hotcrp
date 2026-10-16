@@ -12,7 +12,7 @@ try {
     if ($op === 'setup') {
         $us = new UserStatus($user);
         $us->set_notify(false);
-        if (!$us->save_user((object) ['email'=>'chair@simulation.local', 'firstName'=>'Local', 'lastName'=>'Chair', 'roles'=>'chair'])) {
+        if (!$us->save_user((object) ['email'=>'chair@simulation.local', 'firstName'=>'Local', 'lastName'=>'Chair', 'roles'=>'chair', 'affiliation'=>'Local simulation', 'collaborators'=>'None'])) {
             throw new RuntimeException($us->full_feedback_text());
         }
         $sv = new SettingValues($user);
@@ -36,18 +36,52 @@ try {
             }
             if ($op === 'paper') {
                 $doc = $p->document(DTYPE_SUBMISSION);
-                $j->sim_pdf_path = $doc ? $doc->content_file() : null;
+                $j->sim_pdf_path = null;
+                if ($doc && ($source = $doc->content_file())) {
+                    // content_file() can be a temp file removed at PHP shutdown.
+                    // Materialize an immutable snapshot before returning to the worker.
+                    $dir = $root . '/data/papers/' . getenv('SIM_CONF_ID');
+                    if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+                        throw new RuntimeException('Cannot create PDF snapshot directory');
+                    }
+                    $target = $dir . '/' . $doc->paperStorageId . '.pdf';
+                    if (!is_file($target)) {
+                        $temp = tempnam($dir, 'pdf-');
+                        if (!copy($source, $temp) || !rename($temp, $target)) {
+                            throw new RuntimeException('Cannot save PDF snapshot');
+                        }
+                        chmod($target, 0600);
+                    }
+                    $j->sim_pdf_path = $target;
+                }
                 $j->sim_review_form = $conf->review_form()->export_storage_json();
             }
             $out[] = $j;
         }
     } else if ($op === 'review') {
         $p = $conf->checked_paper_by_id((int)$input->pid, $user);
-        $rv = (new ReviewValues($user))->set_create_users(true);
+        // Resolve storage IDs through the current form; ReviewValues accepts public UIDs.
+        foreach (["s01", "s02", "t01", "t02"] as $fid) {
+            if (property_exists($input, $fid)) {
+                $field = $conf->review_form()->field($fid);
+                if (!$field || !$field->order) {
+                    throw new RuntimeException("Required simulation review field is missing: " . $fid);
+                }
+                $input->{$field->uid()} = $input->$fid;
+                unset($input->$fid);
+            }
+        }
+        $rv = (new ReviewValues($user))->set_create_users(true)->set_notify(false);
         if (!$rv->parse_json($input) || !$rv->check_and_save($p) || $rv->has_error()) {
             throw new RuntimeException($rv->full_feedback_text());
         }
-        $out = ['ok'=>true];
+        $p->invalidate_reviews();
+        $reviewer = $conf->user_by_email($input->email);
+        $saved = $reviewer ? $p->review_by_user($reviewer) : null;
+        if (!$saved || $saved->reviewStatus < ReviewInfo::RS_COMPLETED) {
+            throw new RuntimeException('Review was not published as a completed review');
+        }
+        $out = ['ok'=>true, 'rid'=>$saved->reviewId, 'status'=>'complete'];
     } else if ($op === 'submit') {
         // Only used by automated integration tests; browser submissions use HotCRP.
         $ps = (new PaperStatus($user))->set_any_content_file(true);

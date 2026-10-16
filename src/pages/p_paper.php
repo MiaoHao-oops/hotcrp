@@ -362,6 +362,9 @@ class Paper_Page {
 
         // produce paper table
         $this->print_header(false);
+        if ($this->conf->opt("localSimulation") && class_exists("SimulationExtension")) {
+            SimulationExtension::banner($this->user, $this->qreq);
+        }
         $pt->print_paper_info();
 
         if ($pt->mode !== "edit") {
