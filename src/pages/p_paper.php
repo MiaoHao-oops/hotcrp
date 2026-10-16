@@ -362,10 +362,12 @@ class Paper_Page {
 
         // produce paper table
         $this->print_header(false);
-        if ($this->conf->opt("localSimulation") && class_exists("SimulationExtension")) {
-            SimulationExtension::banner($this->user, $this->qreq);
-        }
         $pt->print_paper_info();
+        if ($this->conf->opt("localSimulation") && class_exists("SimulationExtension")) {
+            echo '<div class="pcard notecard">';
+            SimulationExtension::banner($this->user, $this->qreq);
+            echo '</div>';
+        }
 
         if ($pt->mode !== "edit") {
             if ($pt->mode === "re") {

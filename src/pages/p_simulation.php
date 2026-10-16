@@ -7,6 +7,10 @@ class SimulationExtension {
             if (!$local) {
                 throw new RuntimeException("Local simulation account is missing");
             }
+            if (!in_array($qreq->page(), ["home", "index", "signin"])) {
+                $nav = $qreq->navigation();
+                $qreq->redirect = $nav->page . $nav->path . $nav->query;
+            }
             $info = LoginHelper::login_complete(LoginHelper::check_external_login($local), $qreq);
             if (!($info["ok"] ?? false)) {
                 throw new RuntimeException("Local account is disabled");
