@@ -61,7 +61,10 @@ try {
     } else if ($op === 'review') {
         $p = $conf->checked_paper_by_id((int)$input->pid, $user);
         // Resolve storage IDs through the current form; ReviewValues accepts public UIDs.
-        foreach (["s01", "s02", "t01", "t02"] as $fid) {
+        foreach (array_keys((array) $input) as $fid) {
+            if (!preg_match('/\A[st][0-9]{2}\z/', $fid)) {
+                continue;
+            }
             if (property_exists($input, $fid)) {
                 $field = $conf->review_form()->field($fid);
                 if (!$field || !$field->order) {
