@@ -155,6 +155,11 @@ class PaperTable {
 
     /** @return bool */
     function paper_page_prefers_edit_mode() {
+        // Local simulations keep submissions open, but submitted papers should
+        // default to the overview/reviews. Explicit edit mode remains available.
+        if ($this->conf->opt("localSimulation") && $this->prow->timeSubmitted > 0) {
+            return false;
+        }
         return $this->prow->paperId === 0
             || ($this->prow->has_author($this->user)
                 && $this->prow->submission_round()->time_submit(true));
